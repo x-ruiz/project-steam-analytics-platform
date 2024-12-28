@@ -1,3 +1,7 @@
+// This serves as a first POC on basic api requests with steam.
+// Ideally there will be a sync endpoint called to sync all data with bigquery
+// so that api requests to the steam api are limited.
+
 package main
 
 import (
@@ -47,7 +51,7 @@ type Data struct {
 
 type Playtime struct {
 	TotalPlaytime int `json:"total_playtime"` // in minutes
-	MostPlaytime OwnedGame `json:"most_played_game"`
+	MostPlayedGame OwnedGame `json:"most_played_game"`
 }
 
 
@@ -57,6 +61,7 @@ func main() {
 	router := gin.Default()
 	router.GET("/health", health)
 	router.GET("/getData", getData)
+	router.GET("/getPlaytime", getPlaytime)
 
 	router.Run() // default to 8080
 }
@@ -139,17 +144,41 @@ func getGameData(steamId string) GameData {
 	json.Unmarshal(body, &gameData)
 
 		
-	for indx, i := range gameData.Response.OwnedGames {
+	for idx, i := range gameData.Response.OwnedGames {
 		println(i.ImageIcon)
 		urlString := "http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
 		fullUrl := strings.Replace(urlString, "{appid}", fmt.Sprint(i.AppId), 1)
 		fullUrl = strings.Replace(fullUrl, "{hash}", i.ImageIcon, 1)
-		gameData.Modify(indx, fullUrl)
+		gameData.Modify(idx, fullUrl)
 	}
 	return gameData
 }
 
-// func getPlaytime() int {
-// 
-// }
+// Temporary get playtime function
+// TODO: store all data in bigquery and utilize bigquery for insights
+// Can also do adjust playtime days (divide by 8 and divide by 24)
+// Idea: games percentage of total playtime
+func getPlaytime(c *gin.Context) {
+	var playtimeObj Playtime
+	steamId := c.Query("steamid")
+	gameData := getGameData(steamId) 
+
+	// Loop and add total playtime
+	// Store most played game
+	sum := 0
+	mostPlayedGame := OwnedGame{Playtime: 0}
+
+	println(gameData.Response.OwnedGames)
+	for _, i := range gameData.Response.OwnedGames {
+		sum += i.Playtime
+		if i.Playtime > mostPlayedGame.Playtime {
+			mostPlayedGame = i
+		}
+	}
+
+	playtimeObj.TotalPlaytime = sum
+	playtimeObj.MostPlayedGame = mostPlayedGame
+
+	c.IndentedJSON(http.StatusOK, playtimeObj)
+}
 
