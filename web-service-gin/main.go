@@ -18,12 +18,26 @@ import (
 
 // Models
 //{"response":{"steamid":"76561198305662842","success":1}}
-type UserData struct {
+type SteamId struct {
 	Response struct {
 		Steamid string `json:"steamid"`
 		Success int `json:"success"`
 		Username string `json:"username"`
 	} `json:"response"`
+}
+
+type PlayerSummaryResponse struct {
+	Response struct {
+		Player []PlayerSummary `json:"players"`
+	}`json:"response"`
+} 
+
+type PlayerSummary struct {
+	SteamId string `json:"steamid"`
+	PersonaName string `json:"personaname"`
+	ProfileUrl string `json:"profileurl"`
+	Avatar string `json:"avatar"`
+	AvatarFull string `json:"avatarfull"`
 }
 
 type OwnedGame struct {
@@ -43,7 +57,10 @@ type GameData struct {
 
 
 type Data struct {
-	Username string `json:"username"`
+	PersonaName string `json:"persona_name"`
+	ProfileUrl string `json:"profile_url"`
+	Avatar string `json:"avatar_url"`
+	AvatarFull string `json:"avatar_full_url"`
 	SteamId string `json:"steamid"`
 	GameCount int `json:"game_count"`
 	Games []OwnedGame `json:"games"`
@@ -60,6 +77,7 @@ func main() {
 	loadEnv()
 	router := gin.Default()
 	router.GET("/health", health)
+	router.GET("/getSteamId", getSteamId)
 	router.GET("/getData", getData)
 	router.GET("/getPlaytime", getPlaytime)
 
@@ -106,14 +124,17 @@ func health(c *gin.Context) {
 }
 
 func getData(c *gin.Context) {
-	username := c.Query("username")
+	steamId := c.Query("steamid")
 
-	userData := getSteamUser(username)
-	gameData := getGameData(userData.Response.Steamid)
-
+	playerData := getPlayerSummary(steamId)
+	gameData := getGameData(steamId)
+	
 	data := Data{
-		Username: userData.Response.Username, 
-		SteamId: userData.Response.Steamid,
+		SteamId: steamId,
+		PersonaName: playerData.Response.Player[0].PersonaName,
+		ProfileUrl: playerData.Response.Player[0].ProfileUrl,
+		Avatar: playerData.Response.Player[0].Avatar,
+		AvatarFull: playerData.Response.Player[0].AvatarFull,
 		GameCount: gameData.Response.GameCount,
 		Games: gameData.Response.OwnedGames,
 	}
@@ -121,16 +142,27 @@ func getData(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, data)
 }
 
-func getSteamUser(username string) UserData {
+func getPlayerSummary(steamId string) PlayerSummaryResponse {
+	url := "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=<API_KEY>&steamids=" + steamId
+	
+	body := httpGetRequest(url)
+	var playerSummaryObj PlayerSummaryResponse
+	json.Unmarshal(body, &playerSummaryObj)
+
+	return playerSummaryObj
+}
+
+func getSteamId(c *gin.Context) {
+	username := c.Query("username")
 	url := "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=<API_KEY>&vanityurl=" + username
 
 	body := httpGetRequest(url)
 	// Unmarshal response to struct
-	var userData UserData
-	json.Unmarshal(body, &userData)
-	userData.Response.Username = username
+	var steamIdObj SteamId
+	json.Unmarshal(body, &steamIdObj)
+	steamIdObj.Response.Username = username
 	
-	return userData
+	c.IndentedJSON(http.StatusOK, steamIdObj)
 }
 
 func (game *GameData) Modify(index int, img_icon_url string) {
@@ -145,7 +177,6 @@ func getGameData(steamId string) GameData {
 
 		
 	for idx, i := range gameData.Response.OwnedGames {
-		println(i.ImageIcon)
 		urlString := "http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
 		fullUrl := strings.Replace(urlString, "{appid}", fmt.Sprint(i.AppId), 1)
 		fullUrl = strings.Replace(fullUrl, "{hash}", i.ImageIcon, 1)
