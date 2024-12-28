@@ -16,4 +16,5 @@ https://cloud.google.com/blog/products/devops-sre/deploy-to-cloud-run-with-githu
 
 # STEAM API Methods Used
 
-GET | https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=C71C05B23780DC117849DED792935B1C&vanityurl=Kodiris
+GET | https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=XXXXXXXXXXXXXXXXX&vanityurl=Kodiris
+GET | https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=XXXXXXXXXXXXXXXXX&steamid=76561197960434622&format=json
