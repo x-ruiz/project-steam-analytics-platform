@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 
@@ -39,7 +38,7 @@ func loadEnv() {
 	// Load environment variables
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading environment variables")
+		println("Env file not present")
 	}
 }
 
