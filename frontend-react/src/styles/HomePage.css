@@ -1,0 +1,9 @@
+.Wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  border: 1px solid white;
+  align-items: center;
+  justify-content: center;
+}

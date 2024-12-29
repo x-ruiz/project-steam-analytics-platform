@@ -1,12 +1,14 @@
 import { React, useEffect, useState } from "react";
 import { styled } from "@mui/material/styles";
+import { useParams } from "react-router-dom";
+
 import Box from "@mui/material/Box";
 import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
 
 import GameList from "../components/GameList";
 
-import "../styles/userPage.css";
+import "../styles/UserPage.css";
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: "#fff",
@@ -21,8 +23,8 @@ const Item = styled(Paper)(({ theme }) => ({
 
 const webServiceUrl = process.env.REACT_APP_WEB_SERVICE_URL;
 
-function getUserData(setUserData) {
-  fetch(webServiceUrl + "/getData?steamid=76561199468149920")
+function getUserData(setUserData, steamid) {
+  fetch(webServiceUrl + "/getData?steamid=" + steamid)
     .then((response) => response.json())
     .then((data) => {
       // Process the data
@@ -36,10 +38,11 @@ function getUserData(setUserData) {
 
 export default function UserPage() {
   const [userData, setUserData] = useState({});
+  const { steamid } = useParams();
 
   useEffect(() => {
     console.log("start");
-    getUserData(setUserData);
+    getUserData(setUserData, steamid);
   }, []);
 
   return (
