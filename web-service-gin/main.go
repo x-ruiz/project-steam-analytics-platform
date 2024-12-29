@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -76,6 +77,16 @@ type Playtime struct {
 func main() {
 	loadEnv()
 	router := gin.Default()
+
+		// Configure CORS
+	config := cors.DefaultConfig()
+	config.AllowOrigins = []string{"*"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE"}
+	config.AllowHeaders = []string{"Content-Type", "Authorization"}
+	
+	// Apply CORS to the router
+	router.Use(cors.New(config))
+	
 	router.GET("/health", health)
 	router.GET("/getSteamId", getSteamId)
 	router.GET("/getData", getData)
