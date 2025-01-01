@@ -1,31 +1,32 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-frontend-react/node_modules
-frontend-react/.pnp
-frontend-react/.pnp.js
+react-client/node_modules
+react-client/.pnp
+react-client/.pnp.js
 
 # testing
-frontend-react/coverage
+react-client/coverage
 
 # production
-frontend-react/build
+react-client/build
 
 # misc
-frontend-react/.DS_Store
-frontend-react/.env.local
-frontend-react/.env.development.local
-frontend-react/.env.test.local
-frontend-react/.env.production.local
+react-client/.DS_Store
+react-client/.env.local
+react-client/.env.development.local
+react-client/.env.test.local
+react-client/.env.production.local
 
-frontend-react/npm-debug.log*
-frontend-react/yarn-debug.log*
-frontend-react/yarn-error.log*
-frontend-react/.env
+react-client/npm-debug.log*
+react-client/yarn-debug.log*
+react-client/yarn-error.log*
+react-client/.env
 
 
 ### Web Service
-web-service-go/.env
+go-api-service/.env
+go-api-service/credentials/steam-analytics-platform-f3bc6b14426b.json
 
 ### Terraform
 terraform/steam-analytics-platform-1440e52a1785.json

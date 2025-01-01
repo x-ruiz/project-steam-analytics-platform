@@ -1,3 +1,4 @@
+# Terraform
 tf-fmt:
 	@bash -c 'shopt -s globstar; \
 	for dir in terraform/**/*/; do \
@@ -15,8 +16,13 @@ tf-plan:
 tf-apply:
 	cd terraform && terraform apply
 
+# Go
 start-server:
-	cd web-service-go && go run .
+	cd go-api-service && go run .
 
+go-get-pckgs:
+	cd go-api-service && go get .
+
+# React
 start-frontend:
-	cd frontend-react && npm start
+	cd react-client && npm start

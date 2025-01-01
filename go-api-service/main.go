@@ -5,149 +5,64 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
+	"log"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
+
+	"google.golang.org/api/bigquery/v2"
+	"google.golang.org/api/option"
 )
-
-// Models
-//{"response":{"steamid":"76561198305662842","success":1}}
-type SteamId struct {
-	Response struct {
-		Steamid string `json:"steamid"`
-		Success int `json:"success"`
-		Username string `json:"username"`
-	} `json:"response"`
-}
-
-type PlayerSummaryResponse struct {
-	Response struct {
-		Player []PlayerSummary `json:"players"`
-	}`json:"response"`
-} 
-
-type PlayerSummary struct {
-	SteamId string `json:"steamid"`
-	PersonaName string `json:"personaname"`
-	ProfileUrl string `json:"profileurl"`
-	Avatar string `json:"avatar"`
-	AvatarFull string `json:"avatarfull"`
-}
-
-type OwnedGame struct {
-	AppId int `json:"appid"`
-	GameName string `json:"name"`
-	Playtime int `json:"playtime_forever"` // Total # of minutes played
-	ImageIcon string `json:"img_icon_url"`
-	ImageLogo string `json:"img_logo_url"`
-}
-
-type GameData struct {
-	Response struct {
-		GameCount int `json:"game_count"`
-		OwnedGames []OwnedGame `json:"games"`
-	} `json:"response"`
-}
-
-
-type Data struct {
-	PersonaName string `json:"persona_name"`
-	ProfileUrl string `json:"profile_url"`
-	Avatar string `json:"avatar_url"`
-	AvatarFull string `json:"avatar_full_url"`
-	SteamId string `json:"steamid"`
-	GameCount int `json:"game_count"`
-	Games []OwnedGame `json:"games"`
-}
-
-type Playtime struct {
-	TotalPlaytime int `json:"total_playtime"` // in minutes
-	MostPlayedGame OwnedGame `json:"most_played_game"`
-}
-
 
 // Routing
 func main() {
 	loadEnv()
 	router := gin.Default()
 
-		// Configure CORS
+	// Configure CORS
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE"}
 	config.AllowHeaders = []string{"Content-Type", "Authorization"}
-	
+
 	// Apply CORS to the router
 	router.Use(cors.New(config))
-	
+
 	router.GET("/health", health)
 	router.GET("/getSteamId", getSteamId)
 	router.GET("/getData", getData)
 	router.GET("/getPlaytime", getPlaytime)
 
+	router.POST("/syncData", syncData)
+
 	router.Run() // default to 8080
 }
-
-// Utils
-func loadEnv() {
-	// Load environment variables
-	err := godotenv.Load(".env")
-	if err != nil {
-		println("Env file not present")
-	}
-}
-
-
-func httpGetRequest(url string) []byte {
-	steam_api_key := os.Getenv("STEAM_API_KEY")
-	url = strings.Replace(url, "<API_KEY>", steam_api_key, -1)
-	println("URL: " + url)
-
-	// Make request
-	res, err := http.Get(url)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-	defer res.Body.Close()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
-
-	return body
-
-}
-
 
 // Business Logic
 func health(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, "healthy")
 }
 
+// TODO: Refactor to pull getdata logic outside of the route for reusability in sync function
 func getData(c *gin.Context) {
 	steamId := c.Query("steamid")
 
 	playerData := getPlayerSummary(steamId)
 	gameData := getGameData(steamId)
-	
+
 	data := Data{
-		SteamId: steamId,
+		SteamId:     steamId,
 		PersonaName: playerData.Response.Player[0].PersonaName,
-		ProfileUrl: playerData.Response.Player[0].ProfileUrl,
-		Avatar: playerData.Response.Player[0].Avatar,
-		AvatarFull: playerData.Response.Player[0].AvatarFull,
-		GameCount: gameData.Response.GameCount,
-		Games: gameData.Response.OwnedGames,
+		ProfileUrl:  playerData.Response.Player[0].ProfileUrl,
+		Avatar:      playerData.Response.Player[0].Avatar,
+		AvatarFull:  playerData.Response.Player[0].AvatarFull,
+		GameCount:   gameData.Response.GameCount,
+		Games:       gameData.Response.OwnedGames,
 	}
 
 	c.IndentedJSON(http.StatusOK, data)
@@ -155,7 +70,7 @@ func getData(c *gin.Context) {
 
 func getPlayerSummary(steamId string) PlayerSummaryResponse {
 	url := "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=<API_KEY>&steamids=" + steamId
-	
+
 	body := httpGetRequest(url)
 	var playerSummaryObj PlayerSummaryResponse
 	json.Unmarshal(body, &playerSummaryObj)
@@ -172,12 +87,12 @@ func getSteamId(c *gin.Context) {
 	var steamIdObj SteamId
 	json.Unmarshal(body, &steamIdObj)
 	steamIdObj.Response.Username = username
-	
+
 	c.IndentedJSON(http.StatusOK, steamIdObj)
 }
 
 func (game *GameData) Modify(index int, img_icon_url string) {
-  game.Response.OwnedGames[index].ImageIcon = img_icon_url
+	game.Response.OwnedGames[index].ImageIcon = img_icon_url
 }
 
 func getGameData(steamId string) GameData {
@@ -186,7 +101,6 @@ func getGameData(steamId string) GameData {
 	body := httpGetRequest(url)
 	json.Unmarshal(body, &gameData)
 
-		
 	for idx, i := range gameData.Response.OwnedGames {
 		urlString := "http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
 		fullUrl := strings.Replace(urlString, "{appid}", fmt.Sprint(i.AppId), 1)
@@ -203,7 +117,7 @@ func getGameData(steamId string) GameData {
 func getPlaytime(c *gin.Context) {
 	var playtimeObj Playtime
 	steamId := c.Query("steamid")
-	gameData := getGameData(steamId) 
+	gameData := getGameData(steamId)
 
 	// Loop and add total playtime
 	// Store most played game
@@ -224,3 +138,96 @@ func getPlaytime(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, playtimeObj)
 }
 
+// Create bigquery table if does not exist already
+// Per user when sync function called
+func syncData(c *gin.Context) {
+	bodyString := postHandler(c)
+
+	var steamidObj SteamId
+	err := json.Unmarshal([]byte(bodyString), &steamidObj)
+	if err != nil {
+		log.Printf("[Error] Error getting SteamID from request: %v", err)
+	}
+	println("[INFO] Syncing Data for " + steamidObj.Response.Steamid)
+
+	// Create BQ Table if does not exist for this user
+	createBQTable(steamidObj.Response.Steamid)
+
+	// Call Steam API for up-to-date data
+
+	// Insert up-to-date data into table
+	defer c.IndentedJSON(http.StatusOK, "Success")
+}
+
+func checkBQTableExists(srv bigquery.Service, ctx context.Context, projectID string, datasetID string, tableID string) bool {
+	ts, err := srv.Tables.List(projectID, datasetID).Context(ctx).Do()
+
+	if err != nil {
+		log.Printf("[ERROR] Failed to list tables in dataset %v: %v", datasetID, err)
+		return false
+	}
+
+	for _, i := range ts.Tables {
+		if i.TableReference.TableId == tableID {
+			return true
+		}
+	}
+	return false
+}
+
+func createBQTable(steamId string) {
+	ctx := context.Background()
+
+	// Initialize Bigquery Service
+	srv, err := bigquery.NewService(ctx, option.WithCredentialsFile("./credentials/steam-analytics-platform-f3bc6b14426b.json"))
+	if err != nil {
+		log.Fatalf("Unable to initialize Bigquery service: %v", err)
+	}
+
+	projectID := "steam-analytics-platform"
+	datasetID := "main"
+	tableID := steamId
+
+	tableExists := checkBQTableExists(*srv, ctx, projectID, datasetID, tableID)
+
+	if !tableExists {
+		log.Printf("[INFO] Table %v does not exist in dataset %v, creating...", tableID, datasetID)
+		// Table Schema
+		schema := []*bigquery.TableFieldSchema{
+			{
+				Name:        "name",
+				Type:        "STRING",
+				Mode:        "REQUIRED",
+				Description: "Name of person",
+			},
+			{
+				Name:        "age",
+				Type:        "INTEGER",
+				Mode:        "REQUIRED",
+				Description: "Age of the person",
+			},
+		}
+
+		// Table metadata
+		table := &bigquery.Table{
+			TableReference: &bigquery.TableReference{
+				ProjectId: projectID,
+				DatasetId: datasetID,
+				TableId:   tableID,
+			},
+			Schema: &bigquery.TableSchema{
+				Fields: schema,
+			},
+			Description: "Table to store user data",
+		}
+
+		_, err = srv.Tables.Insert(projectID, datasetID, table).Context(ctx).Do()
+		if err != nil {
+			log.Fatalf("[ERROR] Unable to create table: %v", err)
+		}
+
+		log.Printf("[SUCCESS] Table %v created successfully", tableID)
+	} else {
+		log.Printf("[INFO] Table %v in Dataset %v already exists, skipping creation...", tableID, datasetID)
+	}
+}
