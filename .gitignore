@@ -25,4 +25,4 @@ frontend-react/.env
 
 
 ### Web Service
-web-service-gin/.env
+web-service-go/.env
