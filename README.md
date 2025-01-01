@@ -10,3 +10,4 @@
 ## Documentation
 
 https://cloud.google.com/docs/terraform/create-vm-instance
+https://developers.google.com/looker-studio/connector/data-source-parameters#set_url_parameters
