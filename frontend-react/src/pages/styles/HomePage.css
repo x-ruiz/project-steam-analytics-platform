@@ -1,0 +1,14 @@
+.Wrapper {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  border: 1px solid white;
+  justify-content: center;
+}
+
+.Center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

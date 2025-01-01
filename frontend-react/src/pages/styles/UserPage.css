@@ -1,0 +1,76 @@
+.Wrapper {
+  padding: 45px 45px 45px 45px;
+  /* border: 1px solid red; */
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+
+  & > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.Panel {
+  /* border: 1px solid green; */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.SidePanel {
+  display: flex;
+  flex-direction: column;
+}
+
+.MainPanel {
+  /* border: 1px solid blue; */
+  display: flex;
+  flex-direction: column;
+}
+
+.Profile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  /* justify-content: center; */
+  /* align-items: center; */
+  overflow: hidden;
+}
+
+.PersonaCard {
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  padding: 10px;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  width: 100%;
+}
+
+.StatsCard {
+  flex-grow: 1;
+}
+
+.MainCard {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ChartWrapper {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  /* border: 1px solid yellow; */
+  flex-grow: 1;
+}
+
+.ChartCard {
+  background-color: rgba(0, 0, 0, 0.3);
+  height: 50%;
+}
