@@ -8,7 +8,7 @@ import Grid from "@mui/material/Grid2";
 
 import GameList from "../components/GameList";
 
-import "../styles/UserPage.css";
+import "./styles/UserPage.css";
 
 const Item = styled(Paper)(({ theme }) => ({
   backgroundColor: "#fff",

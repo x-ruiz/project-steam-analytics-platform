@@ -6,18 +6,23 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import ArrowForwardIos from "@mui/icons-material/ArrowForwardIos";
 
-import "../styles/HomePage.css";
+import SteamId from "../components/SteamId";
+
+import "./styles/HomePage.css";
 
 export default function HomePage() {
   const [steamId, setSteamId] = useState("");
 
   const navigate = useNavigate();
-  const handleClick = (steamId) => {
+  const handleViewStats = (steamId) => {
     navigate(`/user/${steamId}`);
   };
 
   return (
     <div className="Wrapper">
+      <div className="Center">
+        <SteamId />
+      </div>
       <div className="Center">
         <Box
           component="form"
@@ -35,10 +40,11 @@ export default function HomePage() {
         <Button
           variant="contained"
           endIcon={<ArrowForwardIos />}
-          onClick={() => handleClick(steamId)}
+          onClick={() => handleViewStats(steamId)}
         >
           View Stats
         </Button>
+        <div></div>
       </div>
     </div>
   );
