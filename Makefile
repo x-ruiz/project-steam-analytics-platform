@@ -1,5 +1,10 @@
 tf-fmt:
-	cd terraform && terraform fmt
+	@bash -c 'shopt -s globstar; \
+	for dir in terraform/**/*/; do \
+		if [ -d $$dir ]; then \
+			cd $$dir && terraform fmt && cd -; \
+		fi \
+	done'
 
 tf-init:
 	cd terraform && terraform init
