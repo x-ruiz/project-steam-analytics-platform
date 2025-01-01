@@ -26,3 +26,7 @@ frontend-react/.env
 
 ### Web Service
 web-service-go/.env
+
+### Terraform
+terraform/steam-analytics-platform-1440e52a1785.json
+terraform/.terraform
