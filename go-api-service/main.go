@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,7 @@ func main() {
 	router.Run() // default to 8080
 }
 
-// Business Logic
+// Router Functions
 func health(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, "healthy")
 }
@@ -51,31 +52,8 @@ func health(c *gin.Context) {
 // TODO: Refactor to pull getdata logic outside of the route for reusability in sync function
 func getData(c *gin.Context) {
 	steamId := c.Query("steamid")
-
-	playerData := getPlayerSummary(steamId)
-	gameData := getGameData(steamId)
-
-	data := Data{
-		SteamId:     steamId,
-		PersonaName: playerData.Response.Player[0].PersonaName,
-		ProfileUrl:  playerData.Response.Player[0].ProfileUrl,
-		Avatar:      playerData.Response.Player[0].Avatar,
-		AvatarFull:  playerData.Response.Player[0].AvatarFull,
-		GameCount:   gameData.Response.GameCount,
-		Games:       gameData.Response.OwnedGames,
-	}
-
+	data := getConsolidateData(steamId)
 	c.IndentedJSON(http.StatusOK, data)
-}
-
-func getPlayerSummary(steamId string) PlayerSummaryResponse {
-	url := "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=<API_KEY>&steamids=" + steamId
-
-	body := httpGetRequest(url)
-	var playerSummaryObj PlayerSummaryResponse
-	json.Unmarshal(body, &playerSummaryObj)
-
-	return playerSummaryObj
 }
 
 func getSteamId(c *gin.Context) {
@@ -93,21 +71,6 @@ func getSteamId(c *gin.Context) {
 
 func (game *GameData) Modify(index int, img_icon_url string) {
 	game.Response.OwnedGames[index].ImageIcon = img_icon_url
-}
-
-func getGameData(steamId string) GameData {
-	url := "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=<API_KEY>&steamid=" + steamId + "&format=json&include_appinfo=true"
-	var gameData GameData
-	body := httpGetRequest(url)
-	json.Unmarshal(body, &gameData)
-
-	for idx, i := range gameData.Response.OwnedGames {
-		urlString := "http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
-		fullUrl := strings.Replace(urlString, "{appid}", fmt.Sprint(i.AppId), 1)
-		fullUrl = strings.Replace(fullUrl, "{hash}", i.ImageIcon, 1)
-		gameData.Modify(idx, fullUrl)
-	}
-	return gameData
 }
 
 // Temporary get playtime function
@@ -150,13 +113,87 @@ func syncData(c *gin.Context) {
 	}
 	println("[INFO] Syncing Data for " + steamidObj.Response.Steamid)
 
+	// Initialize BQ service
+	ctx := context.Background()
+	srv, err := bigquery.NewService(ctx, option.WithCredentialsFile("./credentials/steam-analytics-platform-f3bc6b14426b.json"))
+
+	if err != nil {
+		log.Fatalf("Unable to initialize Bigquery service: %v", err)
+	}
+	projectID := "steam-analytics-platform"
+	datasetID := "main"
+	tableID := steamidObj.Response.Steamid
+
 	// Create BQ Table if does not exist for this user
-	createBQTable(steamidObj.Response.Steamid)
+	createBQTable(srv, ctx, projectID, datasetID, tableID)
 
 	// Call Steam API for up-to-date data
+	data := getConsolidateData(steamidObj.Response.Steamid)
 
 	// Insert up-to-date data into table
-	defer c.IndentedJSON(http.StatusOK, "Success")
+	var maxRetries = 10
+	var delay = 4 * time.Second
+
+	for attempts := 0; attempts < maxRetries; attempts++ {
+		log.Printf("[INFO] Attempt %v to insert data into table %v", attempts+1, tableID)
+		err := insertData(srv, projectID, datasetID, tableID, data)
+		if err == nil {
+			log.Printf("[SUCCESS] Data successfully inserted into table %v", tableID)
+			c.IndentedJSON(http.StatusOK, "Success")
+			return
+		}
+
+		log.Printf("[Error] Failed to insert data: %v", err)
+		if attempts < maxRetries-1 {
+			log.Printf("[INFO] Retrying in %v seconds", delay)
+			time.Sleep(delay)
+		}
+
+		log.Printf("[Error] Failed to insert data after %v retries", maxRetries)
+		c.IndentedJSON(http.StatusInternalServerError, "Failed")
+	}
+}
+
+// Business Logic
+func getConsolidateData(steamId string) Data {
+	playerData := getPlayerSummary(steamId)
+	gameData := getGameData(steamId)
+
+	data := Data{
+		SteamId:     steamId,
+		PersonaName: playerData.Response.Player[0].PersonaName,
+		ProfileUrl:  playerData.Response.Player[0].ProfileUrl,
+		Avatar:      playerData.Response.Player[0].Avatar,
+		AvatarFull:  playerData.Response.Player[0].AvatarFull,
+		GameCount:   gameData.Response.GameCount,
+		Games:       gameData.Response.OwnedGames,
+	}
+	return data
+}
+
+func getGameData(steamId string) GameData {
+	url := "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=<API_KEY>&steamid=" + steamId + "&format=json&include_appinfo=true"
+	var gameData GameData
+	body := httpGetRequest(url)
+	json.Unmarshal(body, &gameData)
+
+	for idx, i := range gameData.Response.OwnedGames {
+		urlString := "http://media.steampowered.com/steamcommunity/public/images/apps/{appid}/{hash}.jpg"
+		fullUrl := strings.Replace(urlString, "{appid}", fmt.Sprint(i.AppId), 1)
+		fullUrl = strings.Replace(fullUrl, "{hash}", i.ImageIcon, 1)
+		gameData.Modify(idx, fullUrl)
+	}
+	return gameData
+}
+
+func getPlayerSummary(steamId string) PlayerSummaryResponse {
+	url := "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=<API_KEY>&steamids=" + steamId
+
+	body := httpGetRequest(url)
+	var playerSummaryObj PlayerSummaryResponse
+	json.Unmarshal(body, &playerSummaryObj)
+
+	return playerSummaryObj
 }
 
 func checkBQTableExists(srv bigquery.Service, ctx context.Context, projectID string, datasetID string, tableID string) bool {
@@ -175,36 +212,66 @@ func checkBQTableExists(srv bigquery.Service, ctx context.Context, projectID str
 	return false
 }
 
-func createBQTable(steamId string) {
-	ctx := context.Background()
-
-	// Initialize Bigquery Service
-	srv, err := bigquery.NewService(ctx, option.WithCredentialsFile("./credentials/steam-analytics-platform-f3bc6b14426b.json"))
-	if err != nil {
-		log.Fatalf("Unable to initialize Bigquery service: %v", err)
-	}
-
-	projectID := "steam-analytics-platform"
-	datasetID := "main"
-	tableID := steamId
-
+func createBQTable(srv *bigquery.Service, ctx context.Context, projectID string, datasetID string, tableID string) {
 	tableExists := checkBQTableExists(*srv, ctx, projectID, datasetID, tableID)
-
 	if !tableExists {
 		log.Printf("[INFO] Table %v does not exist in dataset %v, creating...", tableID, datasetID)
 		// Table Schema
 		schema := []*bigquery.TableFieldSchema{
 			{
-				Name:        "name",
-				Type:        "STRING",
+				Name:        "timestamp",
+				Type:        "TIMESTAMP",
 				Mode:        "REQUIRED",
-				Description: "Name of person",
+				Description: "Timestamp of data insert",
 			},
 			{
-				Name:        "age",
+				Name:        "steam_id",
+				Type:        "STRING",
+				Mode:        "REQUIRED",
+				Description: "Steamid of the user",
+			},
+			{
+				Name:        "persona_name",
+				Type:        "STRING",
+				Mode:        "REQUIRED",
+				Description: "Persona Name of the user",
+			},
+			{
+				Name:        "game_count",
 				Type:        "INTEGER",
 				Mode:        "REQUIRED",
-				Description: "Age of the person",
+				Description: "Total number of games owned by the user account",
+			},
+			{
+				Name:        "games",
+				Type:        "RECORD",
+				Mode:        "REPEATED",
+				Description: "List of games and metadata of games",
+				Fields: []*bigquery.TableFieldSchema{
+					{
+						Name: "appid",
+						Type: "INTEGER",
+						Mode: "REQUIRED",
+					},
+					{
+						Name: "name",
+						Type: "STRING",
+						Mode: "REQUIRED",
+					},
+					{
+						Name: "playtime_forever",
+						Type: "INTEGER",
+						Mode: "REQUIRED",
+					},
+					{
+						Name: "img_icon_url",
+						Type: "STRING",
+					},
+					{
+						Name: "img_logo_url",
+						Type: "STRING",
+					},
+				},
 			},
 		}
 
@@ -221,13 +288,60 @@ func createBQTable(steamId string) {
 			Description: "Table to store user data",
 		}
 
-		_, err = srv.Tables.Insert(projectID, datasetID, table).Context(ctx).Do()
+		_, err := srv.Tables.Insert(projectID, datasetID, table).Context(ctx).Do()
 		if err != nil {
 			log.Fatalf("[ERROR] Unable to create table: %v", err)
 		}
 
 		log.Printf("[SUCCESS] Table %v created successfully", tableID)
+
 	} else {
 		log.Printf("[INFO] Table %v in Dataset %v already exists, skipping creation...", tableID, datasetID)
+	}
+}
+
+func insertData(srv *bigquery.Service, projectID string, datasetID string, tableID string, data Data) error {
+	currentTime := time.Now()
+	bigqueryTimestamp := currentTime.Format(time.RFC3339)
+
+	rows := []*bigquery.TableDataInsertAllRequestRows{
+		{
+			Json: map[string]bigquery.JsonValue{
+				"timestamp":    bigqueryTimestamp,
+				"steam_id":     data.SteamId,
+				"persona_name": data.PersonaName,
+				"game_count":   data.GameCount,
+				"games":        data.Games,
+			},
+		},
+	}
+
+	// Create Insert Request
+	insertRequest := &bigquery.TableDataInsertAllRequest{Rows: rows}
+
+	insertCall := srv.Tabledata.InsertAll(projectID, datasetID, tableID, insertRequest)
+	response, err := insertCall.Do()
+
+	if err != nil {
+		log.Printf("[ERROR] Failed to insert rows: %v", err)
+		return err
+	}
+
+	if len(response.InsertErrors) > 0 {
+		// Loop through each insert error and log details
+		for i, insertError := range response.InsertErrors {
+			log.Printf("Insert error for row %d:", i+1)
+
+			// Loop through the errors for the specific row
+			for _, errDetail := range insertError.Errors {
+				log.Printf("    - Reason: %s", errDetail.Reason)
+				log.Printf("    - Message: %s", errDetail.Message)
+				log.Printf("    - Location: %s", errDetail.Location)
+			}
+		}
+		return err
+	} else {
+		log.Printf("[INFO] Data inserted successfully to table: %v", tableID)
+		return nil
 	}
 }
