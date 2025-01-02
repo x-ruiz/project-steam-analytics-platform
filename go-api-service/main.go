@@ -122,7 +122,7 @@ func syncData(c *gin.Context) {
 	}
 	projectID := "steam-analytics-platform"
 	datasetID := "main"
-	tableID := "user_table"
+	tableID := "t_user_table"
 
 	// Create BQ Table if does not exist for this user
 	// createBQTable(srv, ctx, projectID, datasetID, tableID)
@@ -195,110 +195,6 @@ func getPlayerSummary(steamId string) PlayerSummaryResponse {
 
 	return playerSummaryObj
 }
-
-func checkBQTableExists(srv bigquery.Service, ctx context.Context, projectID string, datasetID string, tableID string) bool {
-	ts, err := srv.Tables.List(projectID, datasetID).Context(ctx).Do()
-
-	if err != nil {
-		log.Printf("[ERROR] Failed to list tables in dataset %v: %v", datasetID, err)
-		return false
-	}
-
-	for _, i := range ts.Tables {
-		if i.TableReference.TableId == tableID {
-			return true
-		}
-	}
-	return false
-}
-
-// func createBQTable(srv *bigquery.Service, ctx context.Context, projectID string, datasetID string, tableID string) {
-// 	tableExists := checkBQTableExists(*srv, ctx, projectID, datasetID, tableID)
-// 	if !tableExists {
-// 		log.Printf("[INFO] Table %v does not exist in dataset %v, creating...", tableID, datasetID)
-// 		// Table Schema
-// 		schema := []*bigquery.TableFieldSchema{
-// 			{
-// 				Name:        "timestamp",
-// 				Type:        "TIMESTAMP",
-// 				Mode:        "REQUIRED",
-// 				Description: "Timestamp of data insert",
-// 			},
-// 			{
-// 				Name:        "steam_id",
-// 				Type:        "STRING",
-// 				Mode:        "REQUIRED",
-// 				Description: "Steamid of the user",
-// 			},
-// 			{
-// 				Name:        "persona_name",
-// 				Type:        "STRING",
-// 				Mode:        "REQUIRED",
-// 				Description: "Persona Name of the user",
-// 			},
-// 			{
-// 				Name:        "game_count",
-// 				Type:        "INTEGER",
-// 				Mode:        "REQUIRED",
-// 				Description: "Total number of games owned by the user account",
-// 			},
-// 			{
-// 				Name:        "games",
-// 				Type:        "RECORD",
-// 				Mode:        "REPEATED",
-// 				Description: "List of games and metadata of games",
-// 				Fields: []*bigquery.TableFieldSchema{
-// 					{
-// 						Name: "appid",
-// 						Type: "INTEGER",
-// 						Mode: "REQUIRED",
-// 					},
-// 					{
-// 						Name: "name",
-// 						Type: "STRING",
-// 						Mode: "REQUIRED",
-// 					},
-// 					{
-// 						Name: "playtime_forever",
-// 						Type: "INTEGER",
-// 						Mode: "REQUIRED",
-// 					},
-// 					{
-// 						Name: "img_icon_url",
-// 						Type: "STRING",
-// 					},
-// 					{
-// 						Name: "img_logo_url",
-// 						Type: "STRING",
-// 					},
-// 				},
-// 			},
-// 		}
-
-// 		// Table metadata
-// 		table := &bigquery.Table{
-// 			TableReference: &bigquery.TableReference{
-// 				ProjectId: projectID,
-// 				DatasetId: datasetID,
-// 				TableId:   tableID,
-// 			},
-// 			Schema: &bigquery.TableSchema{
-// 				Fields: schema,
-// 			},
-// 			Description: "Table to store user data",
-// 		}
-
-// 		_, err := srv.Tables.Insert(projectID, datasetID, table).Context(ctx).Do()
-// 		if err != nil {
-// 			log.Fatalf("[ERROR] Unable to create table: %v", err)
-// 		}
-
-// 		log.Printf("[SUCCESS] Table %v created successfully", tableID)
-
-// 	} else {
-// 		log.Printf("[INFO] Table %v in Dataset %v already exists, skipping creation...", tableID, datasetID)
-// 	}
-// }
 
 func insertData(srv *bigquery.Service, projectID string, datasetID string, tableID string, data Data) error {
 	currentTime := time.Now().Add(-24 * time.Hour)
