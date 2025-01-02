@@ -7,6 +7,7 @@ import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
 
 import GameList from "../components/GameList";
+import { PlaytimeDistributionChart } from "../components/PlaytimeDistributionChart";
 
 import "./styles/UserPage.css";
 
@@ -62,7 +63,7 @@ export default function UserPage() {
                 <GameList userData={userData} />
               </Grid>
               <Grid className="ChartCard" size={6}>
-                <div>Test</div>
+               <PlaytimeDistributionChart /> 
               </Grid>
               <Grid className="ChartCard" size={6}>
                 <div>Test</div>
