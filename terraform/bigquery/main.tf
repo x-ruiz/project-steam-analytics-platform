@@ -6,10 +6,10 @@ resource "google_bigquery_dataset" "dataset" {
 
 resource "google_bigquery_table" "user_table" {
   dataset_id = "main"
-  table_id   = "user_table"
+  table_id   = "t_user_table"
 
-  description = "Table to store user data"
-
+  description         = "Table to store user data"
+  deletion_protection = false
   schema = jsonencode([
     {
       "name" : "timestamp",
@@ -69,4 +69,14 @@ resource "google_bigquery_table" "user_table" {
       ]
     }
   ])
+}
+
+resource "google_bigquery_table" "steam_lifetime_playtime_view" {
+  table_id            = "v_steam_lifetime_playtime"
+  dataset_id          = "main"
+  deletion_protection = false
+  view {
+    query          = file("${path.module}/sql/steam_lifetime_playtime.sql")
+    use_legacy_sql = false
+  }
 }
