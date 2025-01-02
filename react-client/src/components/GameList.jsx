@@ -43,7 +43,6 @@ export default function GameList({ userData }) {
     rows.push(game);
   }
 
-  console.log("rows", rows);
   return (
     <Paper sx={{ height: 400, width: "100%" }}>
       <DataGrid

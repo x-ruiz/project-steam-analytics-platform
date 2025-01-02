@@ -7,6 +7,7 @@ import Paper from "@mui/material/Paper";
 import Grid from "@mui/material/Grid2";
 
 import GameList from "../components/GameList";
+import { PlaytimeDistributionChart } from "../components/PlaytimeDistributionChart";
 
 import "./styles/UserPage.css";
 
@@ -28,7 +29,6 @@ function getUserData(setUserData, steamid) {
     .then((response) => response.json())
     .then((data) => {
       // Process the data
-      console.log("Data", data);
       setUserData(data);
     })
     .catch((error) => {
@@ -36,13 +36,33 @@ function getUserData(setUserData, steamid) {
     });
 }
 
+function getLifetimePlaytime(setLifetimePlaytimeData, setTotalPlaytimeValues, steamid) {
+   fetch(webServiceUrl + "/getLifetimePlaytime?steamid=" + steamid)
+   .then((response) => response.json())
+   .then((data) => {
+      setLifetimePlaytimeData(data)
+      console.log("DATA", data)
+      setTotalPlaytimeValues(
+        {
+          "hours": Math.floor(data[0].lifetime_playtime / 60),
+          "minutes": data[0].lifetime_playtime % 60,
+        }
+      )
+   })
+}
 export default function UserPage() {
   const [userData, setUserData] = useState({});
+  const [lifetimePlaytimeData, setLifetimePlaytimeData] = useState({})
+  const [totalPlaytimeValues, setTotalPlaytimeValues] = useState({})
+
   const { steamid } = useParams();
 
   useEffect(() => {
     console.log("start");
     getUserData(setUserData, steamid);
+
+    // TODO: Cache results so it doesn't query every page load
+    getLifetimePlaytime(setLifetimePlaytimeData, setTotalPlaytimeValues, steamid)
   }, []);
 
   return (
@@ -62,7 +82,8 @@ export default function UserPage() {
                 <GameList userData={userData} />
               </Grid>
               <Grid className="ChartCard" size={6}>
-                <div>Test</div>
+                  <div className="PieChartOverlay">{totalPlaytimeValues.hours}h {totalPlaytimeValues.minutes}m</div>
+                <PlaytimeDistributionChart lifetimePlaytimeData={lifetimePlaytimeData}/> 
               </Grid>
               <Grid className="ChartCard" size={6}>
                 <div>Test</div>

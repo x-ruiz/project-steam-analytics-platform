@@ -1,7 +1,3 @@
-// This serves as a first POC on basic api requests with steam.
-// Ideally there will be a sync endpoint called to sync all data with bigquery
-// so that api requests to the steam api are limited.
-
 package main
 
 import (
@@ -10,15 +6,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
 	"strings"
 	"time"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
-	"google.golang.org/api/bigquery/v2"
-	"google.golang.org/api/option"
 )
+
+const projectID = "steam-analytics-platform"
+const datasetID = "main"
+const tableID = "t_user_table"
 
 // Routing
 func main() {
@@ -38,6 +37,7 @@ func main() {
 	router.GET("/getSteamId", getSteamId)
 	router.GET("/getData", getData)
 	router.GET("/getPlaytime", getPlaytime)
+	router.GET("/getLifetimePlaytime", getLifetimePlaytime)
 
 	router.POST("/syncData", syncData)
 
@@ -49,7 +49,6 @@ func health(c *gin.Context) {
 	c.IndentedJSON(http.StatusOK, "healthy")
 }
 
-// TODO: Refactor to pull getdata logic outside of the route for reusability in sync function
 func getData(c *gin.Context) {
 	steamId := c.Query("steamid")
 	data := getConsolidateData(steamId)
@@ -113,19 +112,7 @@ func syncData(c *gin.Context) {
 	}
 	println("[INFO] Syncing Data for " + steamidObj.Response.Steamid)
 
-	// Initialize BQ service
-	ctx := context.Background()
-	srv, err := bigquery.NewService(ctx, option.WithCredentialsFile("./credentials/steam-analytics-platform-f3bc6b14426b.json"))
-
-	if err != nil {
-		log.Fatalf("Unable to initialize Bigquery service: %v", err)
-	}
-	projectID := "steam-analytics-platform"
-	datasetID := "main"
-	tableID := "t_user_table"
-
-	// Create BQ Table if does not exist for this user
-	// createBQTable(srv, ctx, projectID, datasetID, tableID)
+	client := initBigQueryService()
 
 	// Call Steam API for up-to-date data
 	data := getConsolidateData(steamidObj.Response.Steamid)
@@ -136,7 +123,7 @@ func syncData(c *gin.Context) {
 
 	for attempts := 0; attempts < maxRetries; attempts++ {
 		log.Printf("[INFO] Attempt %v to insert data into table %v", attempts+1, tableID)
-		err := insertData(srv, projectID, datasetID, tableID, data)
+		err := insertData(client, projectID, datasetID, tableID, data)
 		if err == nil {
 			log.Printf("[SUCCESS] Data successfully inserted into table %v", tableID)
 			c.IndentedJSON(http.StatusOK, "Success")
@@ -152,6 +139,12 @@ func syncData(c *gin.Context) {
 		log.Printf("[Error] Failed to insert data after %v retries", maxRetries)
 		c.IndentedJSON(http.StatusInternalServerError, "Failed")
 	}
+}
+
+func getLifetimePlaytime(c *gin.Context) {
+	viewID := "v_steam_lifetime_playtime"
+	rows := queryLifetimePlaytime(c.Query("steamid"), projectID, datasetID, viewID)
+	c.IndentedJSON(http.StatusOK, rows)
 }
 
 // Business Logic
@@ -196,48 +189,65 @@ func getPlayerSummary(steamId string) PlayerSummaryResponse {
 	return playerSummaryObj
 }
 
-func insertData(srv *bigquery.Service, projectID string, datasetID string, tableID string, data Data) error {
-	currentTime := time.Now().Add(-24 * time.Hour)
-	bigqueryTimestamp := currentTime.Format(time.RFC3339)
+// TODO: Understand why this transformation is necessary and why using OwnedGames struct did not work
+func transformOwnedGames(games []OwnedGame) []map[string]interface{} {
+	transformed := []map[string]interface{}{}
+	for _, game := range games {
+		transformed = append(transformed, map[string]interface{}{
+			"appid":            game.AppId,
+			"name":             game.GameName,
+			"playtime_forever": game.Playtime,
+			"img_icon_url":     game.ImageIcon,
+			"img_logo_url":     game.ImageLogo,
+		})
+	}
+	return transformed
+}
 
-	rows := []*bigquery.TableDataInsertAllRequestRows{
-		{
-			Json: map[string]bigquery.JsonValue{
-				"timestamp":    bigqueryTimestamp,
-				"steam_id":     data.SteamId,
-				"persona_name": data.PersonaName,
-				"game_count":   data.GameCount,
-				"games":        data.Games,
-			},
-		},
+func insertData(client *bigquery.Client, projectID string, datasetID string, tableID string, data Data) error {
+	ctx := context.Background()
+
+	// Prepare data to insert
+	type Row struct {
+		Timestamp   string                   `bigquery:"timestamp"`
+		SteamID     string                   `bigquery:"steam_id"`
+		PersonaName string                   `bigquery:"persona_name"`
+		GameCount   int                      `bigquery:"game_count"`
+		Games       []map[string]interface{} `bigquery:"games"`
 	}
 
-	// Create Insert Request
-	insertRequest := &bigquery.TableDataInsertAllRequest{Rows: rows}
+	// currentTime := time.Now().Add(-24 * time.Hour)
+	currentTime := time.Now()
+	row := Row{
+		Timestamp:   currentTime.Format(time.RFC3339),
+		SteamID:     data.SteamId,
+		PersonaName: data.PersonaName,
+		GameCount:   data.GameCount,
+		Games:       transformOwnedGames(data.Games),
+	}
 
-	insertCall := srv.Tabledata.InsertAll(projectID, datasetID, tableID, insertRequest)
-	response, err := insertCall.Do()
+	// Get the table inserter
+	inserter := client.Dataset(datasetID).Table(tableID).Inserter()
 
-	if err != nil {
-		log.Printf("[ERROR] Failed to insert rows: %v", err)
+	// Insert data into BigQuery
+	if err := inserter.Put(ctx, []interface{}{row}); err != nil {
+		log.Printf("[ERROR] Failed to insert rows into BigQuery: %v", err)
 		return err
 	}
 
-	if len(response.InsertErrors) > 0 {
-		// Loop through each insert error and log details
-		for i, insertError := range response.InsertErrors {
-			log.Printf("Insert error for row %d:", i+1)
+	log.Printf("[INFO] Data inserted successfully into table: %v", tableID)
+	return nil
+}
 
-			// Loop through the errors for the specific row
-			for _, errDetail := range insertError.Errors {
-				log.Printf("    - Reason: %s", errDetail.Reason)
-				log.Printf("    - Message: %s", errDetail.Message)
-				log.Printf("    - Location: %s", errDetail.Location)
-			}
-		}
-		return err
-	} else {
-		log.Printf("[INFO] Data inserted successfully to table: %v", tableID)
-		return nil
-	}
+// BQ QUERYING
+func queryLifetimePlaytime(steamId string, projectID string, datasetID string, viewID string) []map[string]bigquery.Value {
+	client := initBigQueryService()
+
+	query := fmt.Sprintf("SELECT * FROM `%s.%s.%s` "+
+		"WHERE steam_id = '%s' LIMIT 5",
+		projectID, datasetID, viewID, steamId)
+
+	rows, _ := executeQuery(query, client)
+	return rows
+
 }

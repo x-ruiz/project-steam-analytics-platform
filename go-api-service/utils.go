@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 // Utils
@@ -50,7 +55,6 @@ func httpGetRequest(url string) []byte {
 	}
 
 	return body
-
 }
 
 func postHandler(c *gin.Context) string {
@@ -58,4 +62,50 @@ func postHandler(c *gin.Context) string {
 	body, _ := io.ReadAll(request.Body)
 	defer request.Body.Close()
 	return string(body)
+}
+
+// Initialize bigquery service
+func initBigQueryService() *bigquery.Client {
+	ctx := context.Background()
+
+	client, err := bigquery.NewClient(ctx, "steam-analytics-platform", option.WithCredentialsFile("./credentials/steam-analytics-platform-f3bc6b14426b.json"))
+	if err != nil {
+		log.Fatalln("[ERROR] BigQuery client failed to initialize:", err)
+	}
+
+	return client
+}
+
+// Execute bigquery query
+func executeQuery(query string, client *bigquery.Client) ([]map[string]bigquery.Value, error) {
+	ctx := context.Background()
+
+	// Create a new BigQuery query
+	q := client.Query(query)
+	q.UseStandardSQL = true // Use standard SQL dialect
+
+	// Run the query
+	iter, err := q.Read(ctx)
+	if err != nil {
+		log.Printf("[ERROR] Error executing query: %v", err)
+		return nil, err
+	}
+
+	// Iterate over query results and collect rows
+	// TODO: UNDERSTAND THIS MORE
+	var rows []map[string]bigquery.Value
+	for {
+		var row map[string]bigquery.Value
+		err := iter.Next(&row) // BQ loads row into destination data structure, key is column, value is row item
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.Printf("[ERROR] Error reading query result: %v", err)
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	log.Printf("ROWS %v", rows)
+	return rows, nil
 }

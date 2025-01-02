@@ -10,8 +10,30 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.116.0 // indirect
+	cloud.google.com/go/iam v1.2.2 // indirect
+	github.com/apache/arrow/go/v15 v15.0.2 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/google/flatbuffers v23.5.26+incompatible // indirect
+	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/pierrec/lz4/v4 v4.1.18 // indirect
+	github.com/zeebo/xxh3 v1.0.2 // indirect
+	go.opencensus.io v0.24.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
+	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
+	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
+	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241113202542-65e8d215514f // indirect
+)
+
+require (
 	cloud.google.com/go/auth v0.13.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.6 // indirect
+	cloud.google.com/go/bigquery v1.65.0
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	github.com/bytedance/sonic v1.12.6 // indirect
 	github.com/bytedance/sonic/loader v0.2.1 // indirect

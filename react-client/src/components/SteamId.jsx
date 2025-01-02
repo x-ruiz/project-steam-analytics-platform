@@ -13,7 +13,6 @@ function getUserData(setUsername, username) {
     .then((response) => response.json())
     .then((data) => {
       // Process the data
-      console.log("Data", data);
       setUsername(data["response"]["steamid"]);
     })
     .catch((error) => {

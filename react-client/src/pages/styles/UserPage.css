@@ -71,6 +71,15 @@
 }
 
 .ChartCard {
+  position: relative;
   background-color: rgba(0, 0, 0, 0.3);
   height: 50%;
+}
+
+.PieChartOverlay {
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%, -50%);
+
 }
